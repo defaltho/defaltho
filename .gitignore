@@ -12,3 +12,6 @@ desktop.ini
 # Logs / temp
 *.log
 *.tmp
+
+# Claude Code local workspace (never commit)
+.claude/

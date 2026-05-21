@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TypoSpheres</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Inter', 'Segoe UI', sans-serif; }
+  canvas { display: block; }
+
+  #panel {
+    position: absolute; top: 8px; left: 8px;
+    width: 196px;
+    background: rgba(0,0,0,0.78);
+    border-radius: 6px;
+    padding: 12px 14px;
+    color: #fff;
+    font-size: 11px;
+    user-select: none;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: opacity 0.2s;
+  }
+  #panel.hidden { opacity: 0; pointer-events: none; }
+
+  .slider-row { margin-bottom: 4px; }
+  .slider-row .lbl {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: rgba(255,255,255,0.6);
+    margin-bottom: 1px;
+  }
+  .slider-row .lbl span { color: #fff; }
+  .slider-row input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 6px; border-radius: 3px;
+    background: #333; outline: none;
+  }
+  .slider-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; cursor: pointer;
+  }
+
+  .section-label {
+    color: rgba(255,255,255,0.45);
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 10px 0 5px;
+  }
+
+  .align-btns { display: flex; gap: 3px; margin-bottom: 8px; }
+  .align-btns button {
+    flex: 1; padding: 5px 0; border: none; border-radius: 3px;
+    background: #222; color: #888; font-size: 9px;
+    cursor: pointer; transition: all 0.15s;
+    font-weight: 600; letter-spacing: 0.3px;
+  }
+  .align-btns button:hover { background: #333; color: #ccc; }
+  .align-btns button.active { background: #fff; color: #000; }
+
+  #textInput {
+    width: 100%; height: 64px;
+    background: #111; border: 1px solid #333; border-radius: 3px;
+    color: #fff; font-size: 11px; padding: 6px;
+    resize: vertical; font-family: inherit; line-height: 1.4;
+  }
+  #textInput:focus { border-color: #fff; outline: none; }
+
+  #freeToggle {
+    width: 100%; padding: 6px; border: none; border-radius: 3px;
+    background: #222; color: #888; font-size: 10px;
+    cursor: pointer; margin-top: 8px; font-weight: 600;
+    transition: all 0.15s;
+  }
+  #freeToggle:hover { background: #333; color: #ccc; }
+  #freeToggle.active { background: #fff; color: #000; }
+
+  .hint {
+    text-align: center; color: rgba(255,255,255,0.25);
+    font-size: 9px; margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <div id="sliders"></div>
+  <div class="section-label">Align</div>
+  <div class="align-btns">
+    <button data-align="0" id="al0">LEFT</button>
+    <button data-align="1" id="al1" class="active">CENTER</button>
+    <button data-align="2" id="al2">RIGHT</button>
+  </div>
+  <div class="section-label">Text</div>
+  <textarea id="textInput">THIS
+IS
+DBR STD</textarea>
+  <button id="freeToggle">FREE MODE [OFF]</button>
+  <div class="hint">H = hide panel &middot; R = rebuild</div>
+</div>
+
+<script>
+const SPH_DETAIL = 28;
+const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#&*!?{}[]<>^~";
+
+let balls = [];
+let displayText = "THIS\nIS\nDBR STD";
+let lines;
+let sphereGeo;
+
+let ballRadius = 65;
+let ballSpacing = 1.55;
+let spaceWidthFactor = 0.8;
+let lineSpacingVal = 2.2;
+let mouseForceVal = 18.0;
+let mouseZoneVal = 5.0;
+let springK = 0.04;
+let springDamp = 0.88;
+let rotSpringK = 0.06;
+let rotDamp = 0.88;
+let windAmount = 0.008;
+
+let freeMode = false;
+let alignMode = 1;
+let mouseOverUI = false;
+let boldFont;
+
+const SLIDER_DEFS = [
+  { id: "scale",     label: "Scale",       min: 30,    max: 120,  step: 0.5,   val: 65 },
+  { id: "spacing",   label: "Spacing",     min: 1.0,   max: 2.5,  step: 0.01,  val: 1.55 },
+  { id: "lineH",     label: "Line Height", min: 1.5,   max: 3.5,  step: 0.01,  val: 2.2 },
+  { id: "mForce",    label: "Mouse Force", min: 0,     max: 40,   step: 0.5,   val: 18 },
+  { id: "mZone",     label: "Mouse Zone",  min: 2,     max: 10,   step: 0.1,   val: 5 },
+  { id: "sprK",      label: "Spring K",    min: 0.005, max: 0.15, step: 0.001, val: 0.04 },
+  { id: "sprD",      label: "Spring Damp", min: 0.80,  max: 0.99, step: 0.001, val: 0.88 },
+  { id: "rotK",      label: "Rot Spring",  min: 0.01,  max: 0.2,  step: 0.001, val: 0.06 },
+  { id: "rotD",      label: "Rot Damp",    min: 0.7,   max: 0.98, step: 0.001, val: 0.88 },
+  { id: "wind",      label: "Wind",        min: 0,     max: 0.06, step: 0.001, val: 0.008 },
+];
+
+let sliderMap = {};
+
+function setup() {
+  createCanvas(windowWidth, windowHeight, WEBGL);
+  textureMode(NORMAL);
+  boldFont = loadFont('https://cdnjs.cloudflare.com/ajax/libs/topcoat/0.8.0/font/SourceCodePro-Bold.otf');
+  sphereGeo = createSphereGeo(SPH_DETAIL);
+  buildUI();
+  lines = displayText.split("\n");
+  rebuildBalls();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  if (!freeMode) rebuildBalls();
+}
+
+function createSphereGeo(detail) {
+  let geo = new p5.Geometry(detail, detail, function() {
+    for (let i = 0; i <= detail; i++) {
+      let lat = (i / detail) * PI;
+      for (let j = 0; j <= detail; j++) {
+        let lon = (j / detail) * TWO_PI;
+        let x = sin(lat) * cos(lon);
+        let y = cos(lat);
+        let z = sin(lat) * sin(lon);
+        this.vertices.push(new p5.Vector(x, y, z));
+        this.vertexNormals.push(new p5.Vector(x, y, z));
+        this.uvs.push(0.5 + x / 2, 0.5 + y / 2);
+      }
+    }
+    let cols = detail + 1;
+    for (let i = 0; i < detail; i++) {
+      for (let j = 0; j < detail; j++) {
+        let a = i * cols + j;
+        let b = a + 1;
+        let c = (i + 1) * cols + j;
+        let d = c + 1;
+        this.faces.push([a, b, d]);
+        this.faces.push([a, d, c]);
+      }
+    }
+  });
+  geo.gid = "typosph_" + detail;
+  return geo;
+}
+
+function makeTexture(glyph) {
+  let s = 512;
+  let pg = createGraphics(s, s);
+  pg.background(255);
+  pg.fill(0);
+  pg.textAlign(CENTER, CENTER);
+  pg.textStyle(BOLD);
+  pg.textSize(s * 0.75);
+  pg.text(glyph, s / 2, s / 2 - s * 0.03);
+  return pg;
+}
+
+function rebuildBalls() {
+  for (let b of balls) {
+    if (b.tex) b.tex.remove();
+  }
+  balls = [];
+
+  if (freeMode) {
+    for (let i = 0; i < 40; i++) {
+      let ang = random(TWO_PI);
+      let dist = random(40, 300);
+      let c = CHARS.charAt(floor(random(CHARS.length)));
+      let b = new Ball(width / 2 + cos(ang) * dist, height / 2 + sin(ang) * dist, c, i);
+      b.hasHome = false;
+      balls.push(b);
+    }
+    return;
+  }
+
+  let lh = ballRadius * lineSpacingVal;
+  let totalH = lines.length * lh;
+  let startY = (height - totalH) / 2 + ballRadius;
+  let margin = ballRadius;
+
+  for (let l = 0; l < lines.length; l++) {
+    let line = lines[l];
+    let sp = ballRadius * ballSpacing;
+    let sw = ballRadius * spaceWidthFactor;
+    let lineW = 0;
+
+    for (let i = 0; i < line.length; i++) {
+      lineW += (line[i] === " ") ? sw : sp;
+    }
+    if (line.length > 0) {
+      lineW -= (line[line.length - 1] === " ") ? sw : sp;
+    }
+
+    let cx;
+    if (alignMode === 0) cx = margin;
+    else if (alignMode === 2) cx = width - lineW - margin;
+    else cx = (width - lineW) / 2;
+
+    let cy = startY + l * lh;
+
+    for (let i = 0; i < line.length; i++) {
+      let c = line[i];
+      if (c === " ") { cx += sw; continue; }
+      let b = new Ball(cx, cy, c, balls.length);
+      b.hasHome = true;
+      balls.push(b);
+      cx += sp;
+    }
+  }
+}
+
+function draw() {
+  background(0);
+
+  let fov = PI / 4.0;
+  let camZ = (height / 2.0) / tan(fov / 2.0);
+  perspective(fov, width / height, 10, camZ * 4);
+  camera(width / 2, height / 2, camZ, width / 2, height / 2, 0, 0, 1, 0);
+  noLights();
+
+  let mx = mouseX;
+  let my = mouseY;
+  let t = frameCount * 0.004;
+
+  for (let b of balls) {
+    if (!mouseOverUI) b.repelFromMouse(mx, my);
+    b.applyWind(t);
+    if (b.hasHome) {
+      b.springBack();
+    } else {
+      b.attractToCenter();
+    }
+    b.update();
+  }
+
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < balls.length; i++) {
+      for (let j = i + 1; j < balls.length; j++) {
+        balls[i].collide(balls[j]);
+      }
+    }
+  }
+
+  for (let b of balls) {
+    b.display();
+  }
+}
+
+class Ball {
+  constructor(x, y, c, id) {
+    this.home = createVector(x, y, 0);
+    this.pos = createVector(x, y, 0);
+    this.vel = createVector(0, 0, 0);
+    this.radius = ballRadius;
+    this.mass = ballRadius * ballRadius;
+    this.id = id;
+    this.hasHome = true;
+    this.rotX = 0; this.rotY = 0; this.rotZ = 0;
+    this.rotVelX = 0; this.rotVelY = 0; this.rotVelZ = 0;
+    this.noiseOffX = random(1000);
+    this.noiseOffY = random(2000);
+    this.glyph = c;
+    this.tex = makeTexture(c);
+  }
+
+  applyWind(t) {
+    this.vel.x += (noise(this.noiseOffX + t) - 0.5) * windAmount;
+    this.vel.y += (noise(this.noiseOffY + t) - 0.5) * windAmount;
+  }
+
+  attractToCenter() {
+    let dx = width / 2 - this.pos.x;
+    let dy = height / 2 - this.pos.y;
+    let d = sqrt(dx * dx + dy * dy);
+    if (d > 1) {
+      this.vel.x += (dx / d) * d * 0.0003;
+      this.vel.y += (dy / d) * d * 0.0003;
+    }
+    this.vel.mult(0.97);
+    this.rotVelX += -this.rotX * 0.01;
+    this.rotVelY += -this.rotY * 0.01;
+    this.rotVelZ += -this.rotZ * 0.01;
+    this.rotVelX *= 0.95;
+    this.rotVelY *= 0.95;
+    this.rotVelZ *= 0.95;
+  }
+
+  repelFromMouse(mx, my) {
+    let dx = this.pos.x - mx;
+    let dy = this.pos.y - my;
+    let d = sqrt(dx * dx + dy * dy);
+    let zone = this.radius * mouseZoneVal;
+    if (d < zone && d > 1) {
+      let strength = map(d, 0, zone, mouseForceVal, 0);
+      let nx = dx / d;
+      let ny = dy / d;
+      this.vel.x += nx * strength * 0.3;
+      this.vel.y += ny * strength * 0.3;
+      this.vel.z += random(-0.5, 0.5) * strength * 0.1;
+      this.rotVelX += ny * strength * 0.008;
+      this.rotVelY -= nx * strength * 0.008;
+      this.rotVelZ += random(-1, 1) * strength * 0.003;
+    }
+  }
+
+  springBack() {
+    this.vel.x += (this.home.x - this.pos.x) * springK;
+    this.vel.y += (this.home.y - this.pos.y) * springK;
+    this.vel.z += (0 - this.pos.z) * springK;
+    this.rotVelX += -this.rotX * rotSpringK;
+    this.rotVelY += -this.rotY * rotSpringK;
+    this.rotVelZ += -this.rotZ * rotSpringK;
+    this.rotVelX *= rotDamp;
+    this.rotVelY *= rotDamp;
+    this.rotVelZ *= rotDamp;
+  }
+
+  update() {
+    if (this.hasHome) this.vel.mult(springDamp);
+    this.pos.add(this.vel);
+    this.rotX += this.rotVelX;
+    this.rotY += this.rotVelY;
+    this.rotZ += this.rotVelZ;
+
+    if (!this.hasHome) {
+      let m = this.radius;
+      if (this.pos.x < m) { this.pos.x = m; this.vel.x *= -0.3; }
+      if (this.pos.x > width - m) { this.pos.x = width - m; this.vel.x *= -0.3; }
+      if (this.pos.y < m) { this.pos.y = m; this.vel.y *= -0.3; }
+      if (this.pos.y > height - m) { this.pos.y = height - m; this.vel.y *= -0.3; }
+    }
+  }
+
+  collide(other) {
+    let dx = other.pos.x - this.pos.x;
+    let dy = other.pos.y - this.pos.y;
+    let dz = other.pos.z - this.pos.z;
+    let dist = sqrt(dx * dx + dy * dy + dz * dz);
+    let minDist = this.radius * 2;
+    if (dist < minDist && dist > 0.01) {
+      let nx = dx / dist, ny = dy / dist, nz = dz / dist;
+      let overlap = minDist - dist;
+      this.pos.x -= nx * overlap * 0.25;
+      this.pos.y -= ny * overlap * 0.25;
+      this.pos.z -= nz * overlap * 0.25;
+      other.pos.x += nx * overlap * 0.25;
+      other.pos.y += ny * overlap * 0.25;
+      other.pos.z += nz * overlap * 0.25;
+
+      let rvx = this.vel.x - other.vel.x;
+      let rvy = this.vel.y - other.vel.y;
+      let rvz = this.vel.z - other.vel.z;
+      let vn = rvx * nx + rvy * ny + rvz * nz;
+      if (vn > 0) return;
+
+      let j = -(1 + 0.15) * vn * 0.5;
+      this.vel.x += nx * j;
+      this.vel.y += ny * j;
+      this.vel.z += nz * j;
+      other.vel.x -= nx * j;
+      other.vel.y -= ny * j;
+      other.vel.z -= nz * j;
+    }
+  }
+
+  display() {
+    push();
+    translate(this.pos.x, this.pos.y, this.pos.z);
+    rotateX(this.rotX);
+    rotateY(this.rotY);
+    rotateZ(this.rotZ);
+    scale(this.radius);
+    texture(this.tex);
+    noStroke();
+    model(sphereGeo);
+    pop();
+  }
+}
+
+// Free mode click
+function mousePressed() {
+  if (freeMode && !mouseOverUI) {
+    let c = CHARS.charAt(floor(random(CHARS.length)));
+    let b = new Ball(mouseX, mouseY, c, balls.length);
+    b.hasHome = false;
+    balls.push(b);
+  }
+}
+
+function keyPressed() {
+  let tag = (document.activeElement || {}).tagName;
+  if (tag === "TEXTAREA" || tag === "INPUT") return;
+
+  if (key === "h" || key === "H") {
+    document.getElementById("panel").classList.toggle("hidden");
+  }
+  if (key === "r" || key === "R") rebuildBalls();
+  if (key === "f" || key === "F") {
+    freeMode = !freeMode;
+    updateFreeToggle();
+    rebuildBalls();
+  }
+  if (key === "1") { setAlign(0); }
+  if (key === "2") { setAlign(1); }
+  if (key === "3") { setAlign(2); }
+}
+
+// ── UI ──
+
+function buildUI() {
+  let panel = document.getElementById("panel");
+  let container = document.getElementById("sliders");
+
+  panel.addEventListener("mouseenter", () => mouseOverUI = true);
+  panel.addEventListener("mouseleave", () => mouseOverUI = false);
+
+  for (let def of SLIDER_DEFS) {
+    let row = document.createElement("div");
+    row.className = "slider-row";
+    row.innerHTML =
+      '<div class="lbl"><span>' + def.label + '</span><span id="v_' + def.id + '">' + def.val.toFixed(3) + '</span></div>' +
+      '<input type="range" id="s_' + def.id + '" min="' + def.min + '" max="' + def.max + '" step="' + def.step + '" value="' + def.val + '">';
+    container.appendChild(row);
+
+    let inp = row.querySelector("input");
+    let valSpan = document.getElementById("v_" + def.id);
+    sliderMap[def.id] = inp;
+
+    inp.addEventListener("input", function() {
+      valSpan.textContent = parseFloat(this.value).toFixed(3);
+      readAllSliders();
+    });
+  }
+
+  document.querySelectorAll(".align-btns button").forEach(btn => {
+    btn.addEventListener("click", () => setAlign(parseInt(btn.dataset.align)));
+  });
+
+  document.getElementById("textInput").addEventListener("input", function() {
+    displayText = this.value;
+    lines = displayText.split("\n");
+    if (!freeMode) rebuildBalls();
+  });
+
+  document.getElementById("freeToggle").addEventListener("click", () => {
+    freeMode = !freeMode;
+    updateFreeToggle();
+    rebuildBalls();
+  });
+}
+
+function readAllSliders() {
+  let oldR = ballRadius, oldS = ballSpacing, oldL = lineSpacingVal;
+  ballRadius     = parseFloat(sliderMap.scale.value);
+  ballSpacing    = parseFloat(sliderMap.spacing.value);
+  lineSpacingVal = parseFloat(sliderMap.lineH.value);
+  mouseForceVal  = parseFloat(sliderMap.mForce.value);
+  mouseZoneVal   = parseFloat(sliderMap.mZone.value);
+  springK        = parseFloat(sliderMap.sprK.value);
+  springDamp     = parseFloat(sliderMap.sprD.value);
+  rotSpringK     = parseFloat(sliderMap.rotK.value);
+  rotDamp        = parseFloat(sliderMap.rotD.value);
+  windAmount     = parseFloat(sliderMap.wind.value);
+
+  if (!freeMode && (
+    Math.abs(ballRadius - oldR) > 0.5 ||
+    Math.abs(ballSpacing - oldS) > 0.01 ||
+    Math.abs(lineSpacingVal - oldL) > 0.01
+  )) {
+    rebuildBalls();
+  }
+}
+
+function setAlign(mode) {
+  alignMode = mode;
+  document.querySelectorAll(".align-btns button").forEach(b => b.classList.remove("active"));
+  document.getElementById("al" + mode).classList.add("active");
+  if (!freeMode) rebuildBalls();
+}
+
+function updateFreeToggle() {
+  let btn = document.getElementById("freeToggle");
+  btn.textContent = freeMode ? "FREE MODE [ON]" : "FREE MODE [OFF]";
+  btn.classList.toggle("active", freeMode);
+}
+</script>
+</body>
+</html>

@@ -1,11 +1,486 @@
-<!doctype html>
-<html lang="pt">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>defaltho</title>
-  </head>
-  <body>
-    Hello World!
-  </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>defaltho</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@700;800;900&display=swap">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Inter', Helvetica, Arial, sans-serif; }
+  canvas { display: block; }
+
+  #topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 14px 22px;
+    color: #fff;
+    font-family: 'Inter', Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    pointer-events: none;
+    mix-blend-mode: difference;
+  }
+  #topbar a {
+    color: #fff;
+    text-decoration: none;
+    pointer-events: auto;
+    transition: opacity 0.15s;
+  }
+  #topbar a:hover { opacity: 0.6; }
+
+  #topbar column-set {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    align-items: center;
+  }
+  #topbar column-unit { display: block; }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <column-set gutter="1">
+    <column-unit slot="0"><a href="https://www.instagram.com/defaltho" target="_blank" rel="noopener">@defaltho</a></column-unit>
+    <column-unit slot="1"></column-unit>
+    <column-unit slot="2"><div style="text-align: right"><a href="#works" rel="history">WORK</a></div></column-unit>
+    <column-unit slot="3">
+      <div style="text-align: right"><a href="about" rel="history">ABOUT</a></div>
+    </column-unit>
+  </column-set>
+</header>
+
+<script>
+// ── Locked configuration ──
+const SPH_DETAIL    = 22;     // ↓ from 28 (~38% fewer triangles)
+const TEX_SIZE      = 256;
+const COLLIDE_PASSES = 2;     // ↓ from 3
+const BALL_RADIUS   = 62.5;
+const BALL_SPACING  = 1.88;
+const SPACE_WIDTH   = 0.8;
+const LINE_SPACING  = 2.55;
+const MOUSE_FORCE   = 24.0;
+const MOUSE_ZONE    = 5.0;
+const MOUSE_ZONE_PX = BALL_RADIUS * MOUSE_ZONE;
+const SPRING_K      = 0.018;
+const SPRING_DAMP   = 0.88;
+const ROT_SPRING_K  = 0.12;
+const ROT_DAMP      = 0.78;
+const WIND_AMOUNT   = 0.06;
+const ALIGN_MODE    = 1;
+
+// ── Phrases (adapted from words.ts / spinnerVerbs.ts for a portfolio
+// that's still being built) ──
+const PHRASES = [
+  "AINDA EM\nCONSTRUÇÃO",
+  "WORK IN\nPROGRESS",
+  "BREWING\nSOMETHING\nNEW",
+  "STILL\nCOOKING",
+  "EM BREVE",
+  "CRAFTING\nNEW\nWORK",
+  "POLISHING\nDETAILS",
+  "PONDERING\nIDEAS",
+  "QUASE\nPRONTO",
+  "TINKERING\nAWAY",
+  "STAY\nTUNED",
+  "BEHIND\nTHE\nSCENES",
+  "ALMOST\nTHERE",
+  "COMING\nSOON",
+  "UNDER\nCONSTRUCTION",
+  "SHAPING\nTHE\nFUTURE",
+  "DREAMING\nIT UP",
+  "PATIENCE\nPLEASE",
+  "STILL\nDREAMING",
+  "WANDERING\nMINDS",
+  "MOSEYING\nALONG",
+  "SCRIBBLING\nNOTES",
+  "WEAVING\nIDEAS",
+  "SOON\nENOUGH",
+  "STILL\nLOADING",
+  "PIXELS\nIN\nPROGRESS",
+  "NEW WORK\nLOADING",
+  "PROCESSING\nIDEAS",
+  "CONJURING\nFORMS",
+  "SKETCHING\nNEW\nIDEAS",
+  "PORTFOLIO\nINCOMING",
+  "JUST A\nMOMENT",
+  "HANG\nON",
+  "ALMOST\nREADY",
+  "ALMOST\nDONE",
+  "A CRIAR\nALGO NOVO",
+  "EM DESEN\nVOLVIMENTO",
+  "DESIGNING\nTHE\nFUTURE",
+  "WAIT\nFOR IT",
+  "NEW THINGS\nBREWING",
+  "EXPERIMENT\nING WITH\nFORMS",
+  "STILL\nIMAGINING",
+  "SOMETHING\nNEW",
+  "WORK\nLOADING",
+  "BAKING\nIDEAS",
+  "CHURNING\nPIXELS",
+  "NOODLING\nAROUND",
+  "MIXING\nCOLORS",
+  "PLOTTING\nLINES",
+  "FORGING\nNEW\nWORK",
+  "DRAWING\nDREAMS",
+  "KEEP\nWATCHING",
+  "SHUFFLING\nPIXELS",
+  "STAY\nCURIOUS",
+  "TRABALHO\nA CAMINHO",
+  "OBRA\nEM CURSO",
+  "STILL\nBREWING",
+  "TBD",
+  "SOMETHING\nIS\nCOMING",
+  "PIXELS\nINCOMING",
+  "DRAFTING\nNEW WORK",
+  "REFINING\nDETAILS",
+  "RENDERING\nDREAMS",
+  // ── Apple-style "Hello" in various languages ──
+  "HELLO",
+  "OLÁ",
+  "HOLA",
+  "BONJOUR",
+  "CIAO",
+  "HALLO",
+  "HEJ",
+  "AHOJ",
+  "SALUT",
+  "TERE",
+  "HEI",
+  "ALOHA",
+  "NAMASTE",
+  "SALAM",
+  "WITAJ",
+  "SAWADEE",
+  "KIA\nORA",
+  "DZIEŃ\nDOBRY",
+  "BUON\nGIORNO",
+  "GUTEN\nTAG",
+  "GOD\nDAG",
+  "MOI",
+  "ANYOUNG",
+  "SVEIKI",
+  "SHALOM",
+];
+
+// ── Phrase rotation timing (random hold per phrase, min 12s) ──
+const HOLD_MIN_FRAMES = 720;   // 12s @ 60fps
+const HOLD_MAX_FRAMES = 1320;  // 22s
+
+// ── Mini "controlled explosion" on phrase change ──
+const EXPLODE_FORCE_MIN = 9;
+const EXPLODE_FORCE_MAX = 17;
+const EXPLODE_ROT_KICK  = 0.4;
+const EXPLODE_Z_KICK    = 7;
+
+let phraseIndex = -1;
+let holdRemaining = 0;
+
+let balls = [];
+let sphereGeo;
+const texCache = {};       // glyph → p5.Graphics
+let layout = [];           // precomputed steps for current phrase
+
+function setup() {
+  const cnv = createCanvas(windowWidth, windowHeight, WEBGL);
+  cnv.canvas.getContext('webgl', { antialias: true, alpha: false });
+  textureMode(NORMAL);
+  noStroke();
+  sphereGeo = createSphereGeo(SPH_DETAIL);
+  // Force-load Inter at the exact weight + size used in the glyph
+  // texture, then start. Without an explicit load(), Google Fonts'
+  // lazy @font-face may not have fetched the woff2 yet when the first
+  // texture is rendered — the canvas would silently fall back to its
+  // default serif and that rendering would get cached.
+  const pxSize = Math.floor(TEX_SIZE * 0.88);
+  const probe  = `800 ${pxSize}px Inter`;
+  const start  = () => nextPhrase();
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load(probe).then(start, start);
+  } else {
+    start();
+  }
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  computeLayout();
+  let placed = 0;
+  for (const step of layout) {
+    if (step.type === 'ball' && placed < balls.length) {
+      balls[placed].home.set(step.x, step.y, 0);
+      placed++;
+    }
+  }
+}
+
+// Planar (decal) UV — the texture is projected onto the sphere from the
+// front, so the glyph reads correctly on the front and shows a mirrored
+// copy on the back (original TypoSpheres behaviour).
+function createSphereGeo(detail) {
+  const geo = new p5.Geometry(detail, detail, function() {
+    for (let i = 0; i <= detail; i++) {
+      const lat = (i / detail) * PI;
+      const sLat = sin(lat), cLat = cos(lat);
+      for (let j = 0; j <= detail; j++) {
+        const lon = (j / detail) * TWO_PI;
+        const x = sLat * cos(lon);
+        const y = cLat;
+        const z = sLat * sin(lon);
+        this.vertices.push(new p5.Vector(x, y, z));
+        this.vertexNormals.push(new p5.Vector(x, y, z));
+        this.uvs.push(0.5 + x / 2, 0.5 + y / 2);
+      }
+    }
+    const cols = detail + 1;
+    for (let i = 0; i < detail; i++) {
+      for (let j = 0; j < detail; j++) {
+        const a = i * cols + j;
+        const b = a + 1;
+        const c = (i + 1) * cols + j;
+        const d = c + 1;
+        this.faces.push([a, b, d]);
+        this.faces.push([a, d, c]);
+      }
+    }
+  });
+  geo.gid = "typosph_" + detail;
+  return geo;
+}
+
+// Use the underlying 2D canvas context directly — p5's textFont/textStyle
+// doesn't reliably pick up web fonts on a createGraphics buffer (it was
+// falling back to the canvas serif default).
+function getTexture(glyph) {
+  if (texCache[glyph]) return texCache[glyph];
+  const s = TEX_SIZE;
+  const pg = createGraphics(s, s);
+  pg.pixelDensity(1);
+  pg.background(255);
+
+  const ctx = pg.drawingContext;
+  ctx.fillStyle = "#000";
+  ctx.font = `800 ${Math.floor(s * 0.88)}px Inter, Helvetica, Arial, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(glyph, s / 2, s / 2);
+
+  texCache[glyph] = pg;
+  return pg;
+}
+
+// Precompute one entry per character of the current phrase:
+//   { type: 'ball', x, y, char } or { type: 'skip' } for spaces / newlines.
+function computeLayout() {
+  layout = [];
+  const fullLines = PHRASES[phraseIndex].split("\n");
+  const lh = BALL_RADIUS * LINE_SPACING;
+  const totalH = fullLines.length * lh;
+  const startY = (height - totalH) / 2 + BALL_RADIUS;
+  const margin = BALL_RADIUS;
+  const sp = BALL_RADIUS * BALL_SPACING;
+  const sw = BALL_RADIUS * SPACE_WIDTH;
+
+  for (let l = 0; l < fullLines.length; l++) {
+    const line = fullLines[l];
+
+    let lineW = 0;
+    for (let i = 0; i < line.length; i++) lineW += (line[i] === " ") ? sw : sp;
+    if (line.length > 0) lineW -= (line[line.length - 1] === " ") ? sw : sp;
+
+    let cx;
+    if (ALIGN_MODE === 0)      cx = margin;
+    else if (ALIGN_MODE === 2) cx = width - lineW - margin;
+    else                       cx = (width - lineW) / 2;
+
+    const cy = startY + l * lh;
+
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === " ") {
+        layout.push({ type: 'skip' });
+        cx += sw;
+      } else {
+        layout.push({ type: 'ball', x: cx, y: cy, char: c });
+        cx += sp;
+      }
+    }
+    if (l < fullLines.length - 1) layout.push({ type: 'skip' });
+  }
+}
+
+// Pick a different phrase at random, recompute layout, spawn all balls
+// at their home positions, then trigger a mini "controlled explosion":
+// each ball gets an outward radial impulse from screen center plus a
+// random tumble. The existing spring physics pulls them back to home,
+// so the word visibly bursts then reforms.
+function nextPhrase() {
+  let next;
+  if (PHRASES.length > 1) {
+    do { next = floor(random(PHRASES.length)); } while (next === phraseIndex);
+  } else {
+    next = 0;
+  }
+  phraseIndex = next;
+  computeLayout();
+  balls = [];
+
+  const cx = width / 2;
+  const cy = height / 2;
+
+  for (const step of layout) {
+    if (step.type !== 'ball') continue;
+    const b = new Ball(step.x, step.y, step.char);
+
+    // Radial direction from screen center to this ball's home.
+    let dx = step.x - cx, dy = step.y - cy;
+    const len = sqrt(dx * dx + dy * dy);
+    let nx, ny;
+    if (len > 0.5) { nx = dx / len; ny = dy / len; }
+    else { const a = random(TWO_PI); nx = cos(a); ny = sin(a); }
+
+    const force = random(EXPLODE_FORCE_MIN, EXPLODE_FORCE_MAX);
+    b.vel.x = nx * force + (random() - 0.5) * 4;
+    b.vel.y = ny * force + (random() - 0.5) * 4;
+    b.vel.z = (random() - 0.5) * EXPLODE_Z_KICK * 2;
+
+    b.rotVelX = (random() - 0.5) * EXPLODE_ROT_KICK * 2;
+    b.rotVelY = (random() - 0.5) * EXPLODE_ROT_KICK * 2;
+    b.rotVelZ = (random() - 0.5) * EXPLODE_ROT_KICK * 2;
+
+    balls.push(b);
+  }
+
+  holdRemaining = floor(random(HOLD_MIN_FRAMES, HOLD_MAX_FRAMES));
+}
+
+function draw() {
+  background(0);
+
+  const fov = PI / 4.0;
+  const camZ = (height / 2.0) / tan(fov / 2.0);
+  perspective(fov, width / height, 10, camZ * 4);
+  camera(width / 2, height / 2, camZ, width / 2, height / 2, 0, 0, 1, 0);
+  noLights();
+
+  if (--holdRemaining <= 0) nextPhrase();
+
+  const mx = mouseX, my = mouseY;
+  const t = frameCount * 0.004;
+  const n = balls.length;
+
+  for (let i = 0; i < n; i++) {
+    const b = balls[i];
+    b.repelFromMouse(mx, my);
+    b.applyWind(t);
+    b.springBack();
+    b.update();
+  }
+
+  for (let pass = 0; pass < COLLIDE_PASSES; pass++) {
+    for (let i = 0; i < n; i++) {
+      const bi = balls[i];
+      for (let j = i + 1; j < n; j++) bi.collide(balls[j]);
+    }
+  }
+
+  for (let i = 0; i < n; i++) balls[i].display();
+}
+
+class Ball {
+  constructor(x, y, c) {
+    this.home = createVector(x, y, 0);
+    this.pos  = createVector(x, y, 0);
+    this.vel  = createVector(0, 0, 0);
+    this.radius = BALL_RADIUS;
+    this.rotX = 0; this.rotY = 0; this.rotZ = 0;
+    this.rotVelX = 0; this.rotVelY = 0; this.rotVelZ = 0;
+    this.noiseOffX = random(1000);
+    this.noiseOffY = random(2000);
+    this.tex = getTexture(c);
+  }
+
+  applyWind(t) {
+    this.vel.x += (noise(this.noiseOffX + t) - 0.5) * WIND_AMOUNT;
+    this.vel.y += (noise(this.noiseOffY + t) - 0.5) * WIND_AMOUNT;
+  }
+
+  repelFromMouse(mx, my) {
+    const dx = this.pos.x - mx;
+    const dy = this.pos.y - my;
+    // Cheap reject before sqrt
+    if (dx * dx + dy * dy > MOUSE_ZONE_PX * MOUSE_ZONE_PX) return;
+    const d = sqrt(dx * dx + dy * dy);
+    if (d <= 1) return;
+    const strength = MOUSE_FORCE * (1 - d / MOUSE_ZONE_PX);
+    const nx = dx / d, ny = dy / d;
+    this.vel.x += nx * strength * 0.3;
+    this.vel.y += ny * strength * 0.3;
+    this.vel.z += (random() - 0.5) * strength * 0.1;
+    this.rotVelX += ny * strength * 0.008;
+    this.rotVelY -= nx * strength * 0.008;
+    this.rotVelZ += (random() * 2 - 1) * strength * 0.003;
+  }
+
+  springBack() {
+    this.vel.x += (this.home.x - this.pos.x) * SPRING_K;
+    this.vel.y += (this.home.y - this.pos.y) * SPRING_K;
+    this.vel.z += (0 - this.pos.z) * SPRING_K;
+    this.rotVelX = (this.rotVelX + -this.rotX * ROT_SPRING_K) * ROT_DAMP;
+    this.rotVelY = (this.rotVelY + -this.rotY * ROT_SPRING_K) * ROT_DAMP;
+    this.rotVelZ = (this.rotVelZ + -this.rotZ * ROT_SPRING_K) * ROT_DAMP;
+  }
+
+  update() {
+    this.vel.mult(SPRING_DAMP);
+    this.pos.add(this.vel);
+    this.rotX += this.rotVelX;
+    this.rotY += this.rotVelY;
+    this.rotZ += this.rotVelZ;
+  }
+
+  collide(other) {
+    const dx = other.pos.x - this.pos.x;
+    const dy = other.pos.y - this.pos.y;
+    const dz = other.pos.z - this.pos.z;
+    const minDist = this.radius * 2;
+    const sq = dx * dx + dy * dy + dz * dz;
+    if (sq >= minDist * minDist || sq < 0.0001) return;
+    const dist = sqrt(sq);
+    const nx = dx / dist, ny = dy / dist, nz = dz / dist;
+    const overlap = minDist - dist;
+    const push = overlap * 0.25;
+    this.pos.x -= nx * push; this.pos.y -= ny * push; this.pos.z -= nz * push;
+    other.pos.x += nx * push; other.pos.y += ny * push; other.pos.z += nz * push;
+
+    const rvx = this.vel.x - other.vel.x;
+    const rvy = this.vel.y - other.vel.y;
+    const rvz = this.vel.z - other.vel.z;
+    const vn = rvx * nx + rvy * ny + rvz * nz;
+    if (vn > 0) return;
+    const j = -(1 + 0.15) * vn * 0.5;
+    this.vel.x += nx * j; this.vel.y += ny * j; this.vel.z += nz * j;
+    other.vel.x -= nx * j; other.vel.y -= ny * j; other.vel.z -= nz * j;
+  }
+
+  display() {
+    push();
+    translate(this.pos.x, this.pos.y, this.pos.z);
+    rotateX(this.rotX);
+    rotateY(this.rotY);
+    rotateZ(this.rotZ);
+    scale(this.radius);
+    texture(this.tex);
+    model(sphereGeo);
+    pop();
+  }
+}
+</script>
+</body>
 </html>
