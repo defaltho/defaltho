@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EXPERIMENTS — defaltho</title>
+<link rel="icon" type="image/svg+xml" href="assets/images/defaltho.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&family=Roboto+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/css/site-nav.css">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="lab-page">
+
+<main class="lab">
+
+  <!-- ── LEFT: menu, grouped by category ──────────────────────────
+       Add a new entry: create experiments/<slug>/index.html, then add
+       an <a class="tree-item" …> line under the matching category. -->
+  <nav class="lab-menu tree" id="lab-tree">
+    <div class="tline"><span class="tdir">defaltho/</span></div>
+    <div class="tline">└─ <span class="tdir">experiments/</span></div>
+    <div class="tline">   ├─ <span class="tdir">creative-code/</span></div>
+    <div class="tline">   │  ├─ <a class="tree-item active" data-src="index.html?embed=1">spheres</a></div>
+    <div class="tline">   │  └─ <a class="tree-item" data-src="https://defaltho.github.io/defaltho-flow/?embed=1">flow-field</a></div>
+    <div class="tline">   └─ <span class="tdir">tools/</span></div>
+    <div class="tline">      ├─ <a class="tree-item" data-src="https://defaltho.github.io/defaltho-qr/?embed=1">qr-code</a></div>
+    <div class="tline">      ├─ <a class="tree-item" data-src="https://defaltho.github.io/defaltho-inspector/?embed=1">inspector</a></div>
+    <div class="tline">      └─ <a class="tree-item" data-src="https://defaltho.github.io/defaltho-dither/?embed=1">dither</a></div>
+  </nav>
+
+  <!-- ── RIGHT: live preview (loads the selected experiment) ── -->
+  <section class="lab-preview" id="lab-preview">
+    <iframe id="preview" src="index.html?embed=1" title="experiment preview"></iframe>
+  </section>
+
+</main>
+
+<script src="assets/js/site-nav.js"></script>
+<script>initSiteNav({ base: '', active: 'experiments' });</script>
+<script>
+// Click a menu item → load it into the preview iframe and "pin" it.
+(function () {
+  const items = Array.from(document.querySelectorAll('a.tree-item'));
+  const frame = document.getElementById('preview');
+  const pane  = document.getElementById('lab-preview');
+
+  items.forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (el.classList.contains('active')) return;   // already pinned
+
+      items.forEach((i) => i.classList.remove('active'));
+      el.classList.add('active');
+
+      frame.src = el.dataset.src;
+
+      // Pin "snap" animation on the preview.
+      pane.classList.remove('pinning');
+      void pane.offsetWidth;                          // restart the animation
+      pane.classList.add('pinning');
+    });
+  });
+
+  pane.addEventListener('animationend', () => pane.classList.remove('pinning'));
+})();
+</script>
+</body>
+</html>
